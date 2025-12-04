@@ -67,16 +67,19 @@ const PhotoOrnaments: React.FC<{ handData: HandData; isVisible: boolean }> = ({ 
     groupRef.current.children.forEach((child, i) => {
       const sprite = child as THREE.Sprite;
       const originalPos = ornamentPositions[i].position;
+      
+      // 保持原始宽高比进行缩放
+      const currentAspectX = sprite.scale.x / sprite.scale.y || 1;
 
       if (handData.isPresent) {
         // Expand Animation
         const expansion = handData.gestureValue; // 0 to 1
         
-        // Target Size
+        // Target Size - 保持宽高比缩放
         const targetSize = THREE.MathUtils.lerp(baseSize, expandedSize, expansion);
-        const currentScale = sprite.scale.x;
-        const newScale = THREE.MathUtils.lerp(currentScale, targetSize, delta * 3);
-        sprite.scale.setScalar(newScale);
+        const currentScaleY = sprite.scale.y;
+        const newScaleY = THREE.MathUtils.lerp(currentScaleY, targetSize, delta * 3);
+        sprite.scale.set(newScaleY * currentAspectX, newScaleY, 1);
 
         // Target Position
         // Move outwards in spiral + slightly upwards
@@ -105,8 +108,10 @@ const PhotoOrnaments: React.FC<{ handData: HandData; isVisible: boolean }> = ({ 
         material.opacity = THREE.MathUtils.lerp(0.8, 1.0, expansion);
 
       } else {
-        // Return to tree
-        sprite.scale.setScalar(THREE.MathUtils.lerp(sprite.scale.x, baseSize, delta * 3));
+        // Return to tree - 保持宽高比缩放
+        const currentScaleY = sprite.scale.y;
+        const newScaleY = THREE.MathUtils.lerp(currentScaleY, baseSize, delta * 3);
+        sprite.scale.set(newScaleY * currentAspectX, newScaleY, 1);
         sprite.position.lerp(originalPos, delta * 3);
         
         // "Ornament" gentle Bobbing
@@ -128,6 +133,8 @@ const PhotoOrnaments: React.FC<{ handData: HandData; isVisible: boolean }> = ({ 
 
 const PhotoSprite: React.FC<{ url: string, position: THREE.Vector3 }> = ({ url, position }) => {
   const [texture, setTexture] = useState<THREE.Texture | null>(null);
+  const [aspectRatio, setAspectRatio] = useState(1); // 宽高比
+  const spriteRef = useRef<THREE.Sprite>(null);
   
   useEffect(() => {
     const loader = new THREE.TextureLoader();
@@ -135,12 +142,31 @@ const PhotoSprite: React.FC<{ url: string, position: THREE.Vector3 }> = ({ url, 
       url, 
       (tex) => {
         tex.colorSpace = THREE.SRGBColorSpace;
+        // 计算照片的宽高比
+        const width = tex.image.width;
+        const height = tex.image.height;
+        setAspectRatio(width / height);
         setTexture(tex);
       },
       undefined,
       () => { /* Ignore missing, will use fallback */ }
     );
   }, [url]);
+
+  // 根据宽高比设置 sprite 的初始缩放
+  useEffect(() => {
+    if (spriteRef.current && texture) {
+      // 基础尺寸，根据宽高比调整
+      const baseSize = 0.4;
+      if (aspectRatio > 1) {
+        // 横向照片
+        spriteRef.current.scale.set(baseSize * aspectRatio, baseSize, 1);
+      } else {
+        // 竖向照片
+        spriteRef.current.scale.set(baseSize, baseSize / aspectRatio, 1);
+      }
+    }
+  }, [texture, aspectRatio]);
 
   // Dynamic canvas texture for "Ornament" look (fallback or background)
   const ornamentTexture = useMemo(() => {
@@ -161,7 +187,7 @@ const PhotoSprite: React.FC<{ url: string, position: THREE.Vector3 }> = ({ url, 
   }, []);
 
   return (
-    <sprite position={position}>
+    <sprite ref={spriteRef} position={position}>
       {/* If photo loads, use it. If not, use generated gold ornament texture */}
       <spriteMaterial 
         map={texture || ornamentTexture} 
