@@ -10,7 +10,7 @@ interface ParticleSceneProps {
 }
 
 // Number of photos to attempt loading
-const PHOTO_COUNT = 17; // 实际照片数量（public/photos/ 中的文件）
+const PHOTO_COUNT = 16; // 实际照片数量（public/photos/ 中的文件）
 
 // Sub-component for individual photo ornaments
 const PhotoOrnaments: React.FC<{ handData: HandData; isVisible: boolean }> = ({ handData, isVisible }) => {
